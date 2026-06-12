@@ -1,5 +1,24 @@
-# Ignorar archivos generados
-src/rover/*.class
+# ─── Archivos generados por JFlex/CUP ────────────────────────────────────────
+src/rover/Lexer.java
 src/rover/Parser.java
 src/rover/sym.java
-src/rover/Lexer.java
+
+# ─── Bytecode Java ────────────────────────────────────────────────────────────
+*.class
+
+# ─── Maven build output ───────────────────────────────────────────────────────
+webapp/target/
+
+# ─── IntelliJ / VS Code / Eclipse ────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log

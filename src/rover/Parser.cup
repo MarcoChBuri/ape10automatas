@@ -1,14 +1,44 @@
 package rover;
 import java_cup.runtime.*;
 
-terminal MOVE, TURN, TAKE_SAMPLE, FORWARD, LEFT, RIGHT, METERS, DEGREES, SEMICOLON, TERRAIN;
+/* ─── Terminales ─────────────────────────────────────────────────────────── */
+terminal MOVE, TURN, TAKE_SAMPLE, FORWARD, LEFT, RIGHT, METERS, DEGREES, SEMICOLON;
+terminal String  TERRAIN;
 terminal Integer NUM;
 
-non terminal programa, comando, instruccion, direccion;
+/* ─── No terminales con tipos de retorno ────────────────────────────────── */
+non terminal NodoPrograma   programa;
+non terminal NodoComando    comando;
+non terminal NodoInstruccion instruccion;
+non terminal String          direccion;
 
 start with programa;
 
-programa    ::= comando programa | comando;
-comando     ::= instruccion SEMICOLON;
-instruccion ::= MOVE direccion NUM METERS | TURN direccion NUM DEGREES | TAKE_SAMPLE TERRAIN;
-direccion   ::= FORWARD | LEFT | RIGHT;
+/* ─── Reglas de producción con acciones semánticas ──────────────────────── */
+
+programa ::=
+    comando:c programa:p
+    {: p.agregarAlFrente(c); RESULT = p; :}
+  | comando:c
+    {: NodoPrograma prog = new NodoPrograma(); prog.agregar(c); RESULT = prog; :}
+  ;
+
+comando ::=
+    instruccion:i SEMICOLON
+    {: RESULT = new NodoComando(i); :}
+  ;
+
+instruccion ::=
+    MOVE direccion:d NUM:n METERS
+    {: RESULT = new NodoMove(d, n); :}
+  | TURN direccion:d NUM:n DEGREES
+    {: RESULT = new NodoTurn(d, n); :}
+  | TAKE_SAMPLE TERRAIN:t
+    {: RESULT = new NodoTakeSample(t); :}
+  ;
+
+direccion ::=
+    FORWARD {: RESULT = "FORWARD"; :}
+  | LEFT    {: RESULT = "LEFT";    :}
+  | RIGHT   {: RESULT = "RIGHT";   :}
+  ;

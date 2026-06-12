@@ -4,13 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel de Control — Rover Perseverance</title>
-  <meta name="description" content="Interfaz web para el análisis léxico y sintáctico del intérprete de comandos del Rover Perseverance." />
+  <meta name="description" content="Interfaz web para el análisis léxico, sintáctico y AST del Rover Perseverance." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
   <style>
-    /* ─── Reset & Tokens ─────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -32,6 +31,8 @@
       --red-bg:        rgba(248, 81, 73, 0.08);
       --red-border:    rgba(248, 81, 73, 0.3);
       --orange:        #d29922;
+      --purple:        #bc8cff;
+      --teal:          #39d353;
       --radius:        8px;
       --radius-lg:     12px;
       --transition:    0.2s ease;
@@ -50,7 +51,6 @@
       padding: 0 16px 48px;
     }
 
-    /* ─── Starfield background ───────────────────────────────────────── */
     body::before {
       content: '';
       position: fixed;
@@ -62,7 +62,6 @@
       z-index: 0;
     }
 
-    /* ─── Header ─────────────────────────────────────────────────────── */
     header {
       width: 100%;
       max-width: 900px;
@@ -99,10 +98,7 @@
       animation: pulse 2s infinite;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     h1 {
       font-family: 'JetBrains Mono', monospace;
@@ -112,7 +108,6 @@
       letter-spacing: -0.02em;
       line-height: 1.2;
     }
-
     h1 span { color: var(--accent); }
 
     .header-sub {
@@ -122,7 +117,6 @@
       font-weight: 300;
     }
 
-    /* ─── Main Layout ────────────────────────────────────────────────── */
     main {
       width: 100%;
       max-width: 900px;
@@ -132,7 +126,6 @@
       z-index: 1;
     }
 
-    /* ─── Panel / Card ───────────────────────────────────────────────── */
     .panel {
       background: var(--bg-surface);
       border: 1px solid var(--border);
@@ -140,7 +133,6 @@
       overflow: hidden;
       transition: border-color var(--transition);
     }
-
     .panel:focus-within {
       border-color: var(--border-focus);
       box-shadow: 0 0 0 3px var(--accent-glow);
@@ -160,16 +152,11 @@
       letter-spacing: 0.04em;
     }
 
-    .panel-header .dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-    }
-
+    .panel-header .dot { width: 10px; height: 10px; border-radius: 50%; }
     .dot-red    { background: #f85149; }
     .dot-yellow { background: #d29922; }
     .dot-green  { background: #3fb950; }
 
-    /* ─── Textarea ───────────────────────────────────────────────────── */
     #code-input {
       width: 100%;
       min-height: 220px;
@@ -184,10 +171,8 @@
       resize: vertical;
       tab-size: 4;
     }
-
     #code-input::placeholder { color: var(--text-muted); }
 
-    /* ─── Toolbar ────────────────────────────────────────────────────── */
     .toolbar {
       display: flex;
       align-items: center;
@@ -198,14 +183,12 @@
       background: var(--bg-elevated);
       border-top: 1px solid var(--border);
     }
-
     .toolbar-hint {
       font-size: 0.78rem;
       color: var(--text-muted);
       font-family: 'JetBrains Mono', monospace;
     }
 
-    /* ─── Button ─────────────────────────────────────────────────────── */
     #analyze-btn {
       display: inline-flex;
       align-items: center;
@@ -222,27 +205,12 @@
       transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
       letter-spacing: 0.01em;
     }
-
-    #analyze-btn:hover {
-      background: #79c0ff;
-      box-shadow: 0 0 20px rgba(88,166,255,0.35);
-      transform: translateY(-1px);
-    }
-
+    #analyze-btn:hover { background: #79c0ff; box-shadow: 0 0 20px rgba(88,166,255,0.35); transform: translateY(-1px); }
     #analyze-btn:active { transform: translateY(0); }
-
-    #analyze-btn:disabled {
-      background: var(--bg-hover);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-
+    #analyze-btn:disabled { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; box-shadow: none; transform: none; }
     .btn-icon { font-size: 1rem; transition: transform 0.4s; }
     #analyze-btn:not(:disabled):hover .btn-icon { transform: rotate(15deg); }
 
-    /* ─── Scanning animation ─────────────────────────────────────────── */
     .scanning-bar {
       height: 2px;
       background: linear-gradient(90deg, transparent, var(--accent), transparent);
@@ -250,33 +218,16 @@
       animation: scan 1.2s linear infinite;
       display: none;
     }
-
     .scanning-bar.active { display: block; }
+    @keyframes scan { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }
 
-    @keyframes scan {
-      0%   { background-position: -100% 0; }
-      100% { background-position: 200% 0; }
-    }
-
-    /* ─── Result Panel ───────────────────────────────────────────────── */
-    #result-panel {
-      display: none;
-      animation: fadeSlideIn 0.3s ease;
-    }
-
+    #result-panel { display: none; animation: fadeSlideIn 0.3s ease; }
     #result-panel.visible { display: block; }
-
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
+    @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     #result-panel.ok  { border-color: var(--green-border); }
     #result-panel.err { border-color: var(--red-border); }
-
     #result-panel.ok  .panel-header { color: var(--green); }
     #result-panel.err .panel-header { color: var(--red); }
-
     #result-panel.ok  { background: var(--green-bg); }
     #result-panel.err { background: var(--red-bg); }
 
@@ -291,17 +242,93 @@
       background: transparent;
       border: none;
     }
-
     #result-panel.ok  #result-pre { color: #7ee787; }
     #result-panel.err #result-pre { color: #ffa198; }
 
-    /* ─── Command Reference ──────────────────────────────────────────── */
+    /* ─── AST Panel ───────────────────────────────────────────────────── */
+    #ast-panel { display: none; animation: fadeSlideIn 0.4s ease 0.1s both; }
+    #ast-panel.visible { display: block; }
+
+    #ast-panel .panel-header { color: var(--purple); }
+    #ast-panel { border-color: rgba(188,140,255,0.3); }
+
+    #ast-content {
+      padding: 20px 24px;
+      overflow-x: auto;
+    }
+
+    /* Tree styles */
+    .ast-tree { list-style: none; }
+    .ast-tree ul { list-style: none; margin-left: 0; padding-left: 0; }
+
+    .ast-tree li {
+      position: relative;
+      padding-left: 24px;
+      margin: 2px 0;
+    }
+
+    /* Vertical line */
+    .ast-tree li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--border);
+    }
+    /* Horizontal branch */
+    .ast-tree li::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 18px;
+      height: 1px;
+      background: var(--border);
+    }
+    /* Last child: cut vertical line */
+    .ast-tree li:last-child::before { height: 14px; }
+
+    .ast-node {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: default;
+      transition: background var(--transition), transform var(--transition);
+      animation: nodeIn 0.3s ease both;
+    }
+    .ast-node:hover { transform: translateX(3px); }
+    @keyframes nodeIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* Node type colors */
+    .node-programa  { background: rgba(88,166,255,0.1);  color: var(--accent);  border: 1px solid rgba(88,166,255,0.25);  }
+    .node-comando   { background: rgba(63,185,80,0.08);  color: var(--green);   border: 1px solid rgba(63,185,80,0.2);    }
+    .node-move      { background: rgba(57,211,83,0.08);  color: #7ee787;        border: 1px solid rgba(57,211,83,0.25);   }
+    .node-turn      { background: rgba(210,153,34,0.1);  color: var(--orange);  border: 1px solid rgba(210,153,34,0.25);  }
+    .node-takesample{ background: rgba(188,140,255,0.1); color: var(--purple);  border: 1px solid rgba(188,140,255,0.25); }
+    .node-default   { background: var(--bg-elevated);    color: var(--text-secondary); border: 1px solid var(--border); }
+
+    .node-icon { font-size: 1em; }
+    .node-label { letter-spacing: 0.02em; }
+    .node-attr {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .node-attr span { color: var(--text-secondary); }
+
+    /* ─── Reference ───────────────────────────────────────────────────── */
     .reference {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 12px;
     }
-
     .ref-card {
       background: var(--bg-surface);
       border: 1px solid var(--border);
@@ -309,26 +336,10 @@
       padding: 16px;
       transition: border-color var(--transition);
     }
-
     .ref-card:hover { border-color: var(--accent); }
+    .ref-title { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 10px; }
+    .ref-code  { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent); line-height: 1.8; }
 
-    .ref-title {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-secondary);
-      margin-bottom: 10px;
-    }
-
-    .ref-code {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
-      color: var(--accent);
-      line-height: 1.8;
-    }
-
-    /* ─── Section label ──────────────────────────────────────────────── */
     .section-label {
       font-size: 0.75rem;
       font-weight: 600;
@@ -338,7 +349,6 @@
       margin-bottom: 12px;
     }
 
-    /* ─── Footer ─────────────────────────────────────────────────────── */
     footer {
       margin-top: 48px;
       text-align: center;
@@ -347,7 +357,6 @@
       position: relative;
       z-index: 1;
     }
-
     footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
   </style>
@@ -358,7 +367,7 @@
   <header>
     <div class="header-badge">Sistema activo — Mars Surface Ops</div>
     <h1>Panel de Control — <span>Rover Perseverance</span></h1>
-    <p class="header-sub">Analizador léxico y sintáctico · JFlex + Java CUP</p>
+    <p class="header-sub">Analizador léxico, sintáctico y AST · JFlex + Java CUP</p>
   </header>
 
   <!-- ─── Main ────────────────────────────────────────────────────────── -->
@@ -374,7 +383,6 @@
           <span class="dot dot-green"></span>
           <span style="margin-left: 6px;">rover_commands.txt</span>
         </div>
-
         <textarea
           id="code-input"
           spellcheck="false"
@@ -386,9 +394,7 @@ Ejemplos:
   TURN LEFT 90 DEGREES;
   TAKE SAMPLE FROM SOIL;"
         ></textarea>
-
         <div class="scanning-bar" id="scanning-bar"></div>
-
         <div class="toolbar">
           <span class="toolbar-hint">Ctrl+Enter para analizar · ; al final de cada instrucción</span>
           <button id="analyze-btn" type="button">
@@ -399,13 +405,22 @@ Ejemplos:
       </div>
     </div>
 
-    <!-- Resultados -->
+    <!-- Resultado del análisis -->
     <div id="result-panel" class="panel" role="region" aria-live="polite" aria-label="Resultado del análisis">
       <div class="panel-header" id="result-header">
         <span class="dot" id="result-dot"></span>
         <span id="result-title">Resultado</span>
       </div>
       <pre id="result-pre"></pre>
+    </div>
+
+    <!-- Árbol de Sintaxis Abstracta -->
+    <div id="ast-panel" class="panel" role="region" aria-label="Árbol de Sintaxis Abstracta">
+      <div class="panel-header">
+        <span class="dot dot-yellow"></span>
+        <span>🌳 Árbol de Sintaxis Abstracta (AST)</span>
+      </div>
+      <div id="ast-content"></div>
     </div>
 
     <!-- Referencia de comandos -->
@@ -437,79 +452,141 @@ Ejemplos:
 
   <!-- ─── JavaScript ──────────────────────────────────────────────────── -->
   <script>
-    const btn        = document.getElementById('analyze-btn');
-    const textarea   = document.getElementById('code-input');
-    const resultPanel= document.getElementById('result-panel');
-    const resultPre  = document.getElementById('result-pre');
-    const resultTitle= document.getElementById('result-title');
-    const resultDot  = document.getElementById('result-dot');
-    const scanBar    = document.getElementById('scanning-bar');
+    const btn         = document.getElementById('analyze-btn');
+    const textarea    = document.getElementById('code-input');
+    const resultPanel = document.getElementById('result-panel');
+    const resultPre   = document.getElementById('result-pre');
+    const resultTitle = document.getElementById('result-title');
+    const resultDot   = document.getElementById('result-dot');
+    const scanBar     = document.getElementById('scanning-bar');
+    const astPanel    = document.getElementById('ast-panel');
+    const astContent  = document.getElementById('ast-content');
 
-    // ── Ctrl+Enter shortcut ───────────────────────────────────────────
+    // Ctrl+Enter shortcut
     textarea.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        analyze();
-      }
+      if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); analyze(); }
     });
-
     btn.addEventListener('click', analyze);
 
-    // ── Función principal de análisis ─────────────────────────────────
+    // ── Función principal ─────────────────────────────────────────────
     async function analyze() {
       const code = textarea.value.trim();
-
       if (!code) {
         showResult('ERROR', '⚠ El área de comandos está vacía.\nEscribe al menos un comando para analizar.');
         return;
       }
-
-      // Estado: analizando…
       setLoading(true);
-
       try {
         const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code })
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         const data = await response.json();
         showResult(data.status, data.message);
-
+        if (data.ast) renderAST(data.ast);
+        else hideAST();
       } catch (err) {
         showResult('ERROR',
-          `✗ No se pudo conectar con el servidor.\n\n` +
-          `Detalle: ${err.message}\n\n` +
-          `Asegúrate de que el servidor Spring Boot esté corriendo en\n` +
-          `http://localhost:8080`
+          `✗ No se pudo conectar con el servidor.\n\nDetalle: ${err.message}\n\n` +
+          `Asegúrate de que el servidor Spring Boot esté corriendo en\nhttp://localhost:8080`
         );
+        hideAST();
       } finally {
         setLoading(false);
       }
     }
 
-    // ── Renderizar resultado ──────────────────────────────────────────
+    // ── Mostrar resultado ─────────────────────────────────────────────
     function showResult(status, message) {
       const isOk = status === 'OK';
-
-      resultPanel.className = 'panel visible ' + (isOk ? 'ok' : 'err');
-      resultDot.className   = 'dot ' + (isOk ? 'dot-green' : 'dot-red');
-      resultTitle.textContent = isOk
-        ? '✓ Análisis exitoso'
-        : '✗ Error en el análisis';
-
-      resultPre.textContent = message;
-
-      // Scroll suave hacia el resultado
+      resultPanel.className   = 'panel visible ' + (isOk ? 'ok' : 'err');
+      resultDot.className     = 'dot ' + (isOk ? 'dot-green' : 'dot-red');
+      resultTitle.textContent = isOk ? '✓ Análisis exitoso' : '✗ Error en el análisis';
+      resultPre.textContent   = message;
       resultPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // ── Estado de carga ───────────────────────────────────────────────
+    // ── AST rendering ─────────────────────────────────────────────────
+    function hideAST() {
+      astPanel.classList.remove('visible');
+    }
+
+    function renderAST(ast) {
+      astContent.innerHTML = '';
+      const ul = document.createElement('ul');
+      ul.className = 'ast-tree';
+      ul.appendChild(buildNode(ast));
+      astContent.appendChild(ul);
+      astPanel.classList.add('visible');
+      astPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function buildNode(node) {
+      const li = document.createElement('li');
+      const nodeEl = document.createElement('span');
+      nodeEl.className = 'ast-node ' + getNodeClass(node.tipo);
+
+      nodeEl.innerHTML = getNodeIcon(node.tipo) +
+        `<span class="node-label">${node.tipo}</span>` +
+        getNodeAttrs(node);
+      li.appendChild(nodeEl);
+
+      // Recurse into children
+      const children = getChildren(node);
+      if (children.length > 0) {
+        const childUl = document.createElement('ul');
+        children.forEach((child, idx) => {
+          const childLi = buildNode(child);
+          // Stagger animation
+          childLi.querySelector('.ast-node').style.animationDelay = (idx * 0.05) + 's';
+          childUl.appendChild(childLi);
+        });
+        li.appendChild(childUl);
+      }
+      return li;
+    }
+
+    function getNodeClass(tipo) {
+      switch ((tipo || '').toLowerCase()) {
+        case 'programa':   return 'node-programa';
+        case 'comando':    return 'node-comando';
+        case 'move':       return 'node-move';
+        case 'turn':       return 'node-turn';
+        case 'takesample': return 'node-takesample';
+        default:           return 'node-default';
+      }
+    }
+
+    function getNodeIcon(tipo) {
+      const icons = {
+        'Programa':   '📋',
+        'Comando':    '▸',
+        'Move':       '🚀',
+        'Turn':       '↩',
+        'TakeSample': '🔬',
+      };
+      return `<span class="node-icon">${icons[tipo] || '◆'}</span>`;
+    }
+
+    function getNodeAttrs(node) {
+      const attrs = [];
+      if (node.direccion !== undefined) attrs.push(`dir: <span>${node.direccion}</span>`);
+      if (node.metros    !== undefined) attrs.push(`${node.metros} <span>m</span>`);
+      if (node.grados    !== undefined) attrs.push(`${node.grados} <span>°</span>`);
+      if (node.terreno   !== undefined) attrs.push(`terreno: <span>${node.terreno}</span>`);
+      if (node.comandos  !== undefined) attrs.push(`<span>${node.comandos.length} cmd</span>`);
+      return attrs.length ? `<span class="node-attr">${attrs.join(' · ')}</span>` : '';
+    }
+
+    function getChildren(node) {
+      if (node.comandos)    return node.comandos;          // Programa → comandos[]
+      if (node.instruccion) return [node.instruccion];     // Comando  → instruccion
+      return [];
+    }
+
+    // ── Loading state ─────────────────────────────────────────────────
     function setLoading(loading) {
       btn.disabled = loading;
       btn.innerHTML = loading
@@ -518,7 +595,6 @@ Ejemplos:
       scanBar.classList.toggle('active', loading);
     }
 
-    // Animación de giro inline
     const style = document.createElement('style');
     style.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
     document.head.appendChild(style);

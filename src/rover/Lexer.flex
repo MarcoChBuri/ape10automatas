@@ -24,10 +24,10 @@ NUM = [0-9]+
 "RIGHT"       { return symbol(sym.RIGHT); }
 "METERS"      { return symbol(sym.METERS); }
 "DEGREES"     { return symbol(sym.DEGREES); }
-"SOIL"        { return symbol(sym.TERRAIN); }
-"ROCK"        { return symbol(sym.TERRAIN); }
-"ICE"         { return symbol(sym.TERRAIN); }
+"SOIL"        { return symbol(sym.TERRAIN, yytext()); }
+"ROCK"        { return symbol(sym.TERRAIN, yytext()); }
+"ICE"         { return symbol(sym.TERRAIN, yytext()); }
 ";"           { return symbol(sym.SEMICOLON); }
 {NUM}         { return symbol(sym.NUM, Integer.parseInt(yytext())); }
 [ \t\r\n]+    { /* Ignorar */ }
-.             { System.err.println("Error: " + yytext()); }
+.             { System.err.println("Error léxico: " + yytext()); }
