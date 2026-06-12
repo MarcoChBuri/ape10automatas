@@ -1,7 +1,7 @@
 package rover;
 
-import java.io.FileReader; // Cambiamos esto
-import java.io.Reader;     // Cambiamos esto
+import java.io.FileReader;
+import java.io.Reader;
 
 public class Main {
     public static void main(String[] args) {

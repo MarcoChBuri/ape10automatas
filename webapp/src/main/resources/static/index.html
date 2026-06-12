@@ -359,6 +359,60 @@
     }
     footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
+    /* ─── Token Table ──────────────────────────────────────────────── */
+    #token-panel { display: none; animation: fadeSlideIn 0.35s ease 0.05s both; }
+    #token-panel.visible { display: block; }
+    #token-panel .panel-header { color: var(--orange); }
+    #token-panel { border-color: rgba(210,153,34,0.3); }
+
+    #token-table-wrap { padding: 16px 20px; overflow-x: auto; }
+
+    .token-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+    }
+    .token-table th {
+      text-align: left;
+      padding: 8px 14px;
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+    }
+    .token-table td {
+      padding: 7px 14px;
+      border-bottom: 1px solid var(--bg-elevated);
+      color: var(--text-primary);
+    }
+    .token-table tr:last-child td { border-bottom: none; }
+    .token-table tr:hover td { background: var(--bg-elevated); }
+
+    /* Columna tipo con badge de color */
+    .token-type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-keyword  { background: rgba(88,166,255,0.12); color: var(--accent);  border: 1px solid rgba(88,166,255,0.25); }
+    .badge-value    { background: rgba(210,153,34,0.12); color: var(--orange); border: 1px solid rgba(210,153,34,0.25); }
+    .badge-punct    { background: rgba(63,185,80,0.1);  color: var(--green);  border: 1px solid rgba(63,185,80,0.25); }
+    .badge-error    { background: rgba(248,81,73,0.15); color: var(--red);    border: 1px solid rgba(248,81,73,0.35); }
+    .badge-default  { background: var(--bg-elevated);  color: var(--text-secondary); border: 1px solid var(--border); }
+
+    /* Fila completa en error */
+    .token-row-error td { color: var(--red) !important; background: rgba(248,81,73,0.06); }
+    .token-row-error td:first-child::before {
+      content: '⚠ ';
+      color: var(--red);
+    }
+
   </style>
 </head>
 <body>
@@ -423,6 +477,15 @@ Ejemplos:
       <div id="ast-content"></div>
     </div>
 
+    <!-- Tabla de Lexemas y Tokens -->
+    <div id="token-panel" class="panel" role="region" aria-label="Tabla de tokens">
+      <div class="panel-header">
+        <span class="dot dot-yellow" style="background:var(--orange)"></span>
+        <span>🏷 Tabla de Lexemas y Tokens</span>
+      </div>
+      <div id="token-table-wrap"></div>
+    </div>
+
     <!-- Referencia de comandos -->
     <div>
       <p class="section-label">Comandos reconocidos</p>
@@ -452,15 +515,17 @@ Ejemplos:
 
   <!-- ─── JavaScript ──────────────────────────────────────────────────── -->
   <script>
-    const btn         = document.getElementById('analyze-btn');
-    const textarea    = document.getElementById('code-input');
-    const resultPanel = document.getElementById('result-panel');
-    const resultPre   = document.getElementById('result-pre');
-    const resultTitle = document.getElementById('result-title');
-    const resultDot   = document.getElementById('result-dot');
-    const scanBar     = document.getElementById('scanning-bar');
-    const astPanel    = document.getElementById('ast-panel');
-    const astContent  = document.getElementById('ast-content');
+    const btn          = document.getElementById('analyze-btn');
+    const textarea     = document.getElementById('code-input');
+    const resultPanel  = document.getElementById('result-panel');
+    const resultPre    = document.getElementById('result-pre');
+    const resultTitle  = document.getElementById('result-title');
+    const resultDot    = document.getElementById('result-dot');
+    const scanBar      = document.getElementById('scanning-bar');
+    const astPanel     = document.getElementById('ast-panel');
+    const astContent   = document.getElementById('ast-content');
+    const tokenPanel   = document.getElementById('token-panel');
+    const tokenWrap    = document.getElementById('token-table-wrap');
 
     // Ctrl+Enter shortcut
     textarea.addEventListener('keydown', (e) => {
@@ -485,7 +550,11 @@ Ejemplos:
         if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         const data = await response.json();
         showResult(data.status, data.message);
-        if (data.ast) renderAST(data.ast);
+        // Tabla de tokens: siempre mostrar si hay tokens
+        if (data.tokens && data.tokens.length > 0) renderTokenTable(data.tokens);
+        else hideTokenTable();
+        // AST: solo si el análisis fue exitoso
+        if (data.status === 'OK' && data.ast) renderAST(data.ast);
         else hideAST();
       } catch (err) {
         showResult('ERROR',
@@ -493,6 +562,7 @@ Ejemplos:
           `Asegúrate de que el servidor Spring Boot esté corriendo en\nhttp://localhost:8080`
         );
         hideAST();
+        hideTokenTable();
       } finally {
         setLoading(false);
       }
@@ -511,6 +581,61 @@ Ejemplos:
     // ── AST rendering ─────────────────────────────────────────────────
     function hideAST() {
       astPanel.classList.remove('visible');
+    }
+
+    // ── Token table rendering ──────────────────────────────────────────
+    function hideTokenTable() {
+      tokenPanel.classList.remove('visible');
+    }
+
+    function renderTokenTable(tokens) {
+      tokenWrap.innerHTML = '';
+      const table = document.createElement('table');
+      table.className = 'token-table';
+
+      // Encabezado
+      const thead = table.createTHead();
+      const hrow  = thead.insertRow();
+      ['#', 'Lexema', 'Tipo / Token', 'Línea', 'Columna'].forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        hrow.appendChild(th);
+      });
+
+      // Cuerpo
+      const tbody = table.createTBody();
+      tokens.forEach((tok, i) => {
+        const tr = tbody.insertRow();
+        const isError = tok.tipo === 'ERROR';
+        if (isError) tr.className = 'token-row-error';
+
+        // # (índice)
+        const tdIdx = tr.insertCell(); tdIdx.textContent = i + 1;
+        // Lexema
+        const tdLex = tr.insertCell(); tdLex.textContent = tok.lexema;
+        // Tipo con badge
+        const tdTipo = tr.insertCell();
+        const badge = document.createElement('span');
+        badge.className = 'token-type-badge ' + getBadgeClass(tok.tipo);
+        badge.textContent = tok.tipo;
+        tdTipo.appendChild(badge);
+        // Línea
+        const tdLin = tr.insertCell(); tdLin.textContent = tok.linea;
+        tdLin.style.color = 'var(--text-muted)';
+        // Columna
+        const tdCol = tr.insertCell(); tdCol.textContent = tok.columna;
+        tdCol.style.color = 'var(--text-muted)';
+      });
+
+      tokenWrap.appendChild(table);
+      tokenPanel.classList.add('visible');
+    }
+
+    function getBadgeClass(tipo) {
+      if (tipo === 'ERROR')    return 'badge-error';
+      if (tipo === 'NUM' || tipo === 'TERRAIN') return 'badge-value';
+      if (tipo === 'SEMICOLON') return 'badge-punct';
+      return 'badge-keyword';
     }
 
     function renderAST(ast) {
