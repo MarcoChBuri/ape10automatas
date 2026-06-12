@@ -1,0 +1,14 @@
+package rover;
+import java_cup.runtime.*;
+
+terminal MOVE, TURN, TAKE_SAMPLE, FORWARD, LEFT, RIGHT, METERS, DEGREES, SEMICOLON;
+terminal Integer NUM;
+
+non terminal programa, comando, instruccion, direccion;
+
+start with programa;
+
+programa    ::= comando programa | comando;
+comando     ::= instruccion SEMICOLON;
+instruccion ::= MOVE direccion NUM METERS | TURN direccion NUM DEGREES | TAKE_SAMPLE;
+direccion   ::= FORWARD | LEFT | RIGHT;

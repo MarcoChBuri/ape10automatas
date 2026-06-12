@@ -1,0 +1,5 @@
+# Ignorar archivos generados
+src/rover/*.class
+src/rover/Parser.java
+src/rover/sym.java
+src/rover/Lexer.java
