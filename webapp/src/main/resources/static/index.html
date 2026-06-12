@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel de Control — Rover Perseverance</title>
+  <meta name="description" content="Interfaz web para el análisis léxico y sintáctico del intérprete de comandos del Rover Perseverance." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── Reset & Tokens ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:       #0d1117;
+      --bg-surface:    #161b22;
+      --bg-elevated:   #21262d;
+      --bg-hover:      #30363d;
+      --border:        #30363d;
+      --border-focus:  #58a6ff;
+      --text-primary:  #e6edf3;
+      --text-secondary:#8b949e;
+      --text-muted:    #484f58;
+      --accent:        #58a6ff;
+      --accent-glow:   rgba(88, 166, 255, 0.15);
+      --green:         #3fb950;
+      --green-bg:      rgba(63, 185, 80, 0.08);
+      --green-border:  rgba(63, 185, 80, 0.3);
+      --red:           #f85149;
+      --red-bg:        rgba(248, 81, 73, 0.08);
+      --red-border:    rgba(248, 81, 73, 0.3);
+      --orange:        #d29922;
+      --radius:        8px;
+      --radius-lg:     12px;
+      --transition:    0.2s ease;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 16px 48px;
+    }
+
+    /* ─── Starfield background ───────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(88,166,255,0.04) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(63,185,80,0.03) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────────────── */
+    header {
+      width: 100%;
+      max-width: 900px;
+      padding: 40px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--accent);
+      background: var(--accent-glow);
+      border: 1px solid rgba(88,166,255,0.25);
+      border-radius: 20px;
+      padding: 4px 12px;
+      margin-bottom: 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .header-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .header-sub {
+      margin-top: 8px;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 300;
+    }
+
+    /* ─── Main Layout ────────────────────────────────────────────────── */
+    main {
+      width: 100%;
+      max-width: 900px;
+      display: grid;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── Panel / Card ───────────────────────────────────────────────── */
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color var(--transition);
+    }
+
+    .panel:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+
+    .panel-header .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red    { background: #f85149; }
+    .dot-yellow { background: #d29922; }
+    .dot-green  { background: #3fb950; }
+
+    /* ─── Textarea ───────────────────────────────────────────────────── */
+    #code-input {
+      width: 100%;
+      min-height: 220px;
+      padding: 20px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      line-height: 1.7;
+      resize: vertical;
+      tab-size: 4;
+    }
+
+    #code-input::placeholder { color: var(--text-muted); }
+
+    /* ─── Toolbar ────────────────────────────────────────────────────── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+    }
+
+    .toolbar-hint {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ─── Button ─────────────────────────────────────────────────────── */
+    #analyze-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      border-radius: var(--radius);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+      letter-spacing: 0.01em;
+    }
+
+    #analyze-btn:hover {
+      background: #79c0ff;
+      box-shadow: 0 0 20px rgba(88,166,255,0.35);
+      transform: translateY(-1px);
+    }
+
+    #analyze-btn:active { transform: translateY(0); }
+
+    #analyze-btn:disabled {
+      background: var(--bg-hover);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn-icon { font-size: 1rem; transition: transform 0.4s; }
+    #analyze-btn:not(:disabled):hover .btn-icon { transform: rotate(15deg); }
+
+    /* ─── Scanning animation ─────────────────────────────────────────── */
+    .scanning-bar {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      background-size: 200% 100%;
+      animation: scan 1.2s linear infinite;
+      display: none;
+    }
+
+    .scanning-bar.active { display: block; }
+
+    @keyframes scan {
+      0%   { background-position: -100% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    /* ─── Result Panel ───────────────────────────────────────────────── */
+    #result-panel {
+      display: none;
+      animation: fadeSlideIn 0.3s ease;
+    }
+
+    #result-panel.visible { display: block; }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #result-panel.ok  { border-color: var(--green-border); }
+    #result-panel.err { border-color: var(--red-border); }
+
+    #result-panel.ok  .panel-header { color: var(--green); }
+    #result-panel.err .panel-header { color: var(--red); }
+
+    #result-panel.ok  { background: var(--green-bg); }
+    #result-panel.err { background: var(--red-bg); }
+
+    #result-pre {
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-primary);
+      background: transparent;
+      border: none;
+    }
+
+    #result-panel.ok  #result-pre { color: #7ee787; }
+    #result-panel.err #result-pre { color: #ffa198; }
+
+    /* ─── Command Reference ──────────────────────────────────────────── */
+    .reference {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .ref-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      transition: border-color var(--transition);
+    }
+
+    .ref-card:hover { border-color: var(--accent); }
+
+    .ref-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    .ref-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      line-height: 1.8;
+    }
+
+    /* ─── Section label ──────────────────────────────────────────────── */
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* ─── Footer ─────────────────────────────────────────────────────── */
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      position: relative;
+      z-index: 1;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Header ──────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-badge">Sistema activo — Mars Surface Ops</div>
+    <h1>Panel de Control — <span>Rover Perseverance</span></h1>
+    <p class="header-sub">Analizador léxico y sintáctico · JFlex + Java CUP</p>
+  </header>
+
+  <!-- ─── Main ────────────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Editor de comandos -->
+    <div>
+      <p class="section-label">Editor de comandos</p>
+      <div class="panel" id="editor-panel">
+        <div class="panel-header">
+          <span class="dot dot-red"></span>
+          <span class="dot dot-yellow"></span>
+          <span class="dot dot-green"></span>
+          <span style="margin-left: 6px;">rover_commands.txt</span>
+        </div>
+
+        <textarea
+          id="code-input"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
+          placeholder="Escribe los comandos del Rover aquí...
+Ejemplos:
+  MOVE FORWARD 50 METERS;
+  TURN LEFT 90 DEGREES;
+  TAKE SAMPLE FROM SOIL;"
+        ></textarea>
+
+        <div class="scanning-bar" id="scanning-bar"></div>
+
+        <div class="toolbar">
+          <span class="toolbar-hint">Ctrl+Enter para analizar · ; al final de cada instrucción</span>
+          <button id="analyze-btn" type="button">
+            <span class="btn-icon">⚡</span>
+            Analizar Comandos
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div id="result-panel" class="panel" role="region" aria-live="polite" aria-label="Resultado del análisis">
+      <div class="panel-header" id="result-header">
+        <span class="dot" id="result-dot"></span>
+        <span id="result-title">Resultado</span>
+      </div>
+      <pre id="result-pre"></pre>
+    </div>
+
+    <!-- Referencia de comandos -->
+    <div>
+      <p class="section-label">Comandos reconocidos</p>
+      <div class="reference">
+        <div class="ref-card">
+          <div class="ref-title">🚀 Movimiento</div>
+          <div class="ref-code">MOVE FORWARD {n} METERS;<br>MOVE LEFT {n} METERS;<br>MOVE RIGHT {n} METERS;</div>
+        </div>
+        <div class="ref-card">
+          <div class="ref-title">↩ Rotación</div>
+          <div class="ref-code">TURN LEFT {n} DEGREES;<br>TURN RIGHT {n} DEGREES;<br>TURN FORWARD {n} DEGREES;</div>
+        </div>
+        <div class="ref-card">
+          <div class="ref-title">🔬 Muestras</div>
+          <div class="ref-code">TAKE SAMPLE FROM SOIL;<br>TAKE SAMPLE FROM ROCK;<br>TAKE SAMPLE FROM ICE;</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ─── Footer ──────────────────────────────────────────────────────── -->
+  <footer>
+    <p>Proyecto académico · Análisis de Lenguajes Formales · APE 10 &nbsp;|&nbsp;
+       Backend: <a href="/api/health" target="_blank">Spring Boot</a></p>
+  </footer>
+
+  <!-- ─── JavaScript ──────────────────────────────────────────────────── -->
+  <script>
+    const btn        = document.getElementById('analyze-btn');
+    const textarea   = document.getElementById('code-input');
+    const resultPanel= document.getElementById('result-panel');
+    const resultPre  = document.getElementById('result-pre');
+    const resultTitle= document.getElementById('result-title');
+    const resultDot  = document.getElementById('result-dot');
+    const scanBar    = document.getElementById('scanning-bar');
+
+    // ── Ctrl+Enter shortcut ───────────────────────────────────────────
+    textarea.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        analyze();
+      }
+    });
+
+    btn.addEventListener('click', analyze);
+
+    // ── Función principal de análisis ─────────────────────────────────
+    async function analyze() {
+      const code = textarea.value.trim();
+
+      if (!code) {
+        showResult('ERROR', '⚠ El área de comandos está vacía.\nEscribe al menos un comando para analizar.');
+        return;
+      }
+
+      // Estado: analizando…
+      setLoading(true);
+
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        showResult(data.status, data.message);
+
+      } catch (err) {
+        showResult('ERROR',
+          `✗ No se pudo conectar con el servidor.\n\n` +
+          `Detalle: ${err.message}\n\n` +
+          `Asegúrate de que el servidor Spring Boot esté corriendo en\n` +
+          `http://localhost:8080`
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── Renderizar resultado ──────────────────────────────────────────
+    function showResult(status, message) {
+      const isOk = status === 'OK';
+
+      resultPanel.className = 'panel visible ' + (isOk ? 'ok' : 'err');
+      resultDot.className   = 'dot ' + (isOk ? 'dot-green' : 'dot-red');
+      resultTitle.textContent = isOk
+        ? '✓ Análisis exitoso'
+        : '✗ Error en el análisis';
+
+      resultPre.textContent = message;
+
+      // Scroll suave hacia el resultado
+      resultPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── Estado de carga ───────────────────────────────────────────────
+    function setLoading(loading) {
+      btn.disabled = loading;
+      btn.innerHTML = loading
+        ? '<span class="btn-icon" style="animation: spin 1s linear infinite">⚙</span> Analizando...'
+        : '<span class="btn-icon">⚡</span> Analizar Comandos';
+      scanBar.classList.toggle('active', loading);
+    }
+
+    // Animación de giro inline
+    const style = document.createElement('style');
+    style.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>
