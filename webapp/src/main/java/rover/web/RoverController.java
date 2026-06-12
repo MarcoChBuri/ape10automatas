@@ -2,38 +2,40 @@ package rover.web;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import rover.Lexer;
-import rover.Parser;
 
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * REST controller que expone el endpoint de análisis del Rover.
- * Recibe el código fuente en JSON, lo pasa al analizador léxico/sintáctico
- * (generado por JFlex + CUP) y devuelve el resultado del análisis.
+ *
+ * Carga el Lexer y Parser del rover mediante reflexión dinámica,
+ * apuntando a las clases pre-compiladas en src/rover/*.class.
+ * Esto evita dependencias de compilación directas con clases generadas.
  */
 @RestController
 @RequestMapping("/api")
 @CrossOrigin(origins = "*")
 public class RoverController {
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DTOs internos (Request / Response)
-    // ─────────────────────────────────────────────────────────────────────
+    // ─── DTOs ─────────────────────────────────────────────────────────────
 
-    /** Cuerpo de la petición POST /api/analyze */
     public static class AnalysisRequest {
         private String code;
-        public String getCode() { return code; }
-        public void setCode(String code) { this.code = code; }
+        public String getCode()              { return code; }
+        public void   setCode(String code)   { this.code = code; }
     }
 
-    /** Cuerpo de la respuesta */
     public static class AnalysisResult {
-        private final String status;   // "OK" | "ERROR"
-        private final String message;  // Detalle del resultado o del error
+        private final String status;
+        private final String message;
 
         public AnalysisResult(String status, String message) {
             this.status = status;
@@ -44,60 +46,109 @@ public class RoverController {
         public String getMessage() { return message; }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Endpoint principal
-    // ─────────────────────────────────────────────────────────────────────
+    // ─── Classpath del rover (resuelto relativo al JAR/classpath actual) ──
 
     /**
-     * POST /api/analyze
-     *
-     * Ejemplo de cuerpo JSON:
-     * {
-     *   "code": "MOVE FORWARD 50 METERS;\nTURN LEFT 90 DEGREES;"
-     * }
-     *
-     * Respuesta exitosa:
-     * { "status": "OK", "message": "✓ Análisis completado exitosamente.\n\nComandos analizados:\n  1. MOVE FORWARD 50 METERS;\n  ..." }
-     *
-     * Respuesta con error:
-     * { "status": "ERROR", "message": "Error sintáctico en línea 2: ..." }
+     * Resuelve la ruta al directorio de clases compiladas del rover.
+     * Sube desde webapp/target/classes hasta la raíz del proyecto
+     * y luego busca src/rover/ y lib/java-cup-runtime-11b.jar/.
      */
+    private URLClassLoader buildRoverClassLoader() throws Exception {
+        // Ruta base: directorio donde corre el proceso (webapp/)
+        Path webappDir = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
+        Path projectRoot = webappDir.getParent(); // ape10automatas/
+
+        // IMPORTANTE: URLClassLoader requiere trailing "/" para tratar la URL
+        // como directorio de clases, no como JAR.
+        URL roverSrc   = toDirectoryUrl(projectRoot.resolve("src"));
+        URL cupRuntime = toDirectoryUrl(projectRoot.resolve("lib/java-cup-runtime-11b.jar"));
+
+        return new URLClassLoader(
+            new URL[]{ roverSrc, cupRuntime },
+            this.getClass().getClassLoader()
+        );
+    }
+
+    /** Convierte una Path de directorio a URL garantizando el trailing slash. */
+    private URL toDirectoryUrl(Path dir) throws Exception {
+        String url = dir.toUri().toString();
+        if (!url.endsWith("/")) url += "/";
+        return new URL(url);
+    }
+
+    /**
+     * Busca el primer constructor declarado con exactamente N parámetros.
+     * Evita NoSuchMethodException cuando la firma exacta del tipo no coincide
+     * entre classloaders (e.g. clases generadas por JFlex/CUP).
+     */
+    private Constructor<?> findConstructor(Class<?> clazz, int paramCount) {
+        for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+            if (c.getParameterCount() == paramCount) {
+                c.setAccessible(true);
+                return c;
+            }
+        }
+        throw new RuntimeException(
+            "No se encontró constructor con " + paramCount + " parámetro(s) en " + clazz.getName()
+                + ". Constructores disponibles: " + java.util.Arrays.toString(clazz.getDeclaredConstructors())
+        );
+    }
+
+    // ─── Endpoint POST /api/analyze ───────────────────────────────────────
+
     @PostMapping("/analyze")
     public ResponseEntity<AnalysisResult> analyze(@RequestBody AnalysisRequest req) {
 
         String code = req.getCode();
 
-        // Validación básica de entrada vacía
         if (code == null || code.isBlank()) {
             return ResponseEntity.badRequest()
-                    .body(new AnalysisResult("ERROR", "⚠ No se recibió ningún comando para analizar."));
+                .body(new AnalysisResult("ERROR",
+                    "⚠ El área de comandos está vacía.\nEscribe al menos un comando."));
         }
 
-        try {
-            // ── Instanciar el Lexer (JFlex) pasando el texto como StringReader ──
-            StringReader reader = new StringReader(code);
-            Lexer  lexer  = new Lexer(reader);
+        try (URLClassLoader cl = buildRoverClassLoader()) {
 
-            // ── Instanciar el Parser (CUP) y ejecutar el análisis ──
-            Parser parser = new Parser(lexer);
-            parser.parse();
+            // Cargar las clases generadas por JFlex/CUP vía reflexión
+            Class<?> lexerClass  = cl.loadClass("rover.Lexer");
+            Class<?> parserClass = cl.loadClass("rover.Parser");
 
-            // ── Si llegamos aquí, el análisis fue exitoso ──
-            String report = buildSuccessReport(code);
-            return ResponseEntity.ok(new AnalysisResult("OK", report));
+            // Instanciar Lexer con el único constructor de 1 parámetro (java.io.Reader)
+            Constructor<?> lexerCtor = findConstructor(lexerClass, 1);
+            Object lexer = lexerCtor.newInstance(new StringReader(code));
 
+            // Instanciar Parser con el único constructor de 1 parámetro (Scanner/Lexer)
+            Constructor<?> parserCtor = findConstructor(parserClass, 1);
+            Object parser = parserCtor.newInstance(lexer);
+            Method parseMeth = parserClass.getMethod("parse");
+            parseMeth.invoke(parser);
+
+            return ResponseEntity.ok(
+                new AnalysisResult("OK", buildSuccessReport(code))
+            );
+
+        } catch (java.lang.reflect.InvocationTargetException ite) {
+            // La excepción real viene envuelta en InvocationTargetException
+            Throwable cause = ite.getCause() != null ? ite.getCause() : ite;
+            return ResponseEntity.ok(
+                new AnalysisResult("ERROR", buildErrorReport(cause))
+            );
         } catch (Exception e) {
-            // Captura errores léxicos (símbolo no reconocido) y sintácticos (producción inválida)
-            String errorDetail = buildErrorReport(e);
-            return ResponseEntity.ok(new AnalysisResult("ERROR", errorDetail));
+            return ResponseEntity.ok(
+                new AnalysisResult("ERROR", buildErrorReport(e))
+            );
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Helpers de formateo de reportes
-    // ─────────────────────────────────────────────────────────────────────
+    // ─── Endpoint GET /api/health ─────────────────────────────────────────
 
-    /** Construye un reporte detallado de éxito listando cada comando reconocido. */
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Rover Analyzer Web — OK");
+    }
+
+    // ─── Helpers de formateo ──────────────────────────────────────────────
+
     private String buildSuccessReport(String code) {
         StringBuilder sb = new StringBuilder();
         sb.append("✓ Análisis léxico y sintáctico completado exitosamente.\n");
@@ -113,26 +164,23 @@ public class RoverController {
             }
         }
 
-        sb.append("\n─".repeat(1)).append("─".repeat(49)).append("\n");
+        sb.append("\n").append("─".repeat(50)).append("\n");
         sb.append("Total de instrucciones válidas: ").append(count - 1);
         return sb.toString();
     }
 
-    /** Extrae el mensaje de error más útil de la excepción capturada. */
-    private String buildErrorReport(Exception e) {
+    private String buildErrorReport(Throwable e) {
         StringBuilder sb = new StringBuilder();
         sb.append("✗ Error durante el análisis.\n");
         sb.append("─".repeat(50)).append("\n");
 
-        // Mensaje principal de la excepción
         String msg = e.getMessage();
         if (msg != null && !msg.isBlank()) {
             sb.append("Detalle: ").append(msg).append("\n");
         } else {
-            sb.append("Detalle: ").append(e.getClass().getSimpleName()).append("\n");
+            sb.append("Tipo: ").append(e.getClass().getSimpleName()).append("\n");
         }
 
-        // Stack trace resumido (primeras 6 líneas) para mayor contexto
         StringWriter sw = new StringWriter();
         e.printStackTrace(new PrintWriter(sw));
         String[] stackLines = sw.toString().split("\n");
@@ -143,14 +191,5 @@ public class RoverController {
         }
 
         return sb.toString();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // Endpoint de salud (útil para verificar que el servidor está activo)
-    // ─────────────────────────────────────────────────────────────────────
-
-    @GetMapping("/health")
-    public ResponseEntity<String> health() {
-        return ResponseEntity.ok("Rover Analyzer Web — OK");
     }
 }

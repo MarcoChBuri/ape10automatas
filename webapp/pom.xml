@@ -20,20 +20,11 @@
 
   <properties>
     <java.version>17</java.version>
-    <!--
-      Rutas a las dependencias externas del proyecto rover.
-      Los "JARs" en lib/ son directorios de clases expandidos (no archivos .jar),
-      por eso se referencian como rutas de directorio en el classpath.
-    -->
-    <rover.root>${project.basedir}/..</rover.root>
-    <cup.runtime.dir>${rover.root}/lib/java-cup-runtime-11b.jar</cup.runtime.dir>
-    <cup.tool.dir>${rover.root}/lib/java-cup-11b.jar</cup.tool.dir>
-    <jflex.jar>${rover.root}/lib/jflex-1.9.1/lib/jflex-full-1.9.1.jar</jflex.jar>
-    <rover.src.dir>${rover.root}/src/rover</rover.src.dir>
+    <maven.compiler.release>17</maven.compiler.release>
   </properties>
 
   <dependencies>
-    <!-- Spring Boot Web (Tomcat embebido + REST) -->
+    <!-- Spring Boot Web (Tomcat embebido + Jackson para JSON) -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
@@ -42,107 +33,12 @@
 
   <build>
     <plugins>
-
-      <!--
-        Paso 1: Generar Lexer.java (JFlex) y Parser.java / sym.java (CUP)
-        antes de compilar. Se invoca llamando al build.bat del proyecto raíz,
-        que ya contiene exactamente estos pasos.
-      -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-antrun-plugin</artifactId>
-        <version>3.1.0</version>
-        <executions>
-
-          <execution>
-            <id>generate-lexer-parser</id>
-            <phase>generate-sources</phase>
-            <goals><goal>run</goal></goals>
-            <configuration>
-              <target>
-                <echo message="Generando Lexer con JFlex..."/>
-                <java fork="true" failonerror="false"
-                      jar="${jflex.jar}">
-                  <arg value="-d"/>
-                  <arg value="${rover.src.dir}"/>
-                  <arg value="${rover.src.dir}/Lexer.flex"/>
-                </java>
-
-                <echo message="Generando Parser con CUP..."/>
-                <java fork="true" failonerror="false"
-                      classname="java_cup.Main">
-                  <classpath>
-                    <pathelement location="${cup.tool.dir}"/>
-                  </classpath>
-                  <arg value="-parser"/>
-                  <arg value="Parser"/>
-                  <arg value="-destdir"/>
-                  <arg value="${rover.src.dir}"/>
-                  <arg value="${rover.src.dir}/Parser.cup"/>
-                </java>
-              </target>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!--
-        Paso 2: Añadir las fuentes del analizador (src/rover/*.java generados)
-        al árbol de compilación de Maven.
-      -->
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>build-helper-maven-plugin</artifactId>
-        <version>3.5.0</version>
-        <executions>
-          <execution>
-            <id>add-rover-sources</id>
-            <phase>generate-sources</phase>
-            <goals><goal>add-source</goal></goals>
-            <configuration>
-              <sources>
-                <!-- El directorio padre de rover/ para que el paquete "rover" sea correcto -->
-                <source>${rover.root}/src</source>
-              </sources>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!--
-        Paso 3: Añadir el directorio de clases del runtime CUP al classpath
-        de compilación usando el maven-dependency-plugin sería más limpio,
-        pero como es un directorio (no un JAR), lo referenciamos directamente
-        en el maven-compiler-plugin.
-      -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <release>17</release>
-          <compilerArgs>
-            <!-- Añade el directorio de clases del CUP runtime al classpath -->
-            <arg>-classpath</arg>
-            <arg>${cup.runtime.dir}</arg>
-          </compilerArgs>
-        </configuration>
-      </plugin>
-
-      <!--
-        Paso 4: Spring Boot plugin.
-        includeSystemScope añade cualquier dependencia system al fat JAR.
-      -->
+      <!-- Spring Boot repackage -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
-        <configuration>
-          <additionalClasspathElements>
-            <!-- El runtime CUP se incluye en el fat JAR final -->
-            <additionalClasspathElement>${cup.runtime.dir}</additionalClasspathElement>
-          </additionalClasspathElements>
-        </configuration>
       </plugin>
-
     </plugins>
   </build>
+
 </project>
